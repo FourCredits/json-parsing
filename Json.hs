@@ -83,9 +83,30 @@ jNull = JNull <$ string "null"
 jBool :: Parser JValue
 jBool = JBool True <$ string "true" <|> JBool False <$ string "false"
 
--- TODO: escaping
+charInString :: Parser Char
+charInString = do
+  c <- satisfy (/= '"')
+  if c == '\\' then get >>= matchEscapedChar else pure c
+
+regularChar :: Parser Char
+regularChar = satisfy (/= '"')
+
+escapedChar :: Parser Char
+escapedChar = char '\\' >> get >>= matchEscapedChar
+
+matchEscapedChar :: Alternative m => Char -> m Char
+matchEscapedChar '"' = pure '\"'
+matchEscapedChar '\\' = pure '\\'
+matchEscapedChar 'b' = pure '\b'
+matchEscapedChar 'f' = pure '\f'
+matchEscapedChar 'n' = pure '\n'
+matchEscapedChar 'r' = pure '\r'
+matchEscapedChar 't' = pure '\t'
+matchEscapedChar _ = empty
+
 stringLiteral :: Parser String
-stringLiteral = surround (char '"') (char '"') (zeroOrMore (satisfy (/= '"')))
+stringLiteral =
+  surround (char '"') (char '"') (zeroOrMore (escapedChar <|> regularChar))
 
 charsToInt :: String -> Int
 charsToInt = foldl' f 0
