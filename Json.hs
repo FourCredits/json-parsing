@@ -58,12 +58,6 @@ zeroOrMore p = oneOrMore p <|> pure []
 oneOrMore :: Parser a -> Parser [a]
 oneOrMore p = (:) <$> p <*> zeroOrMore p
 
-whitespace :: Parser ()
-whitespace = void $ zeroOrMore $ satisfy isSpace
-
-surroundWhitespace :: Parser a -> Parser a
-surroundWhitespace = surround whitespace whitespace
-
 -- Doesn't expect a trailing separator, empty result is valid
 sepBy :: Parser separator -> Parser element -> Parser [element]
 sepBy separator element =
@@ -134,22 +128,21 @@ jNumber = JNumber <$> (double <|> fromIntegral <$> int)
 jString :: Parser JValue
 jString = JString <$> stringLiteral
 
+ws :: Parser ()
+ws = void $ zeroOrMore (char ' ' <|> char '\r' <|> char '\n' <|> char '\t')
+
+emptyList :: Parser [a]
+emptyList = ws $> []
+
 jArray :: Parser JValue
-jArray = JArray <$> surround start end (sepBy sep jValue)
-  where
-    start = surroundWhitespace (char '[')
-    end = surroundWhitespace (char ']')
-    sep = surroundWhitespace (char ',')
+jArray = JArray <$> surround (char '[') (char ']') (values <|> emptyList)
+  where values = sepBy (char ',') jValue
 
 jObject :: Parser JValue
-jObject = JObject <$> surround start end (sepBy sep kv)
-  where
-    start = surroundWhitespace (char '{')
-    end = surroundWhitespace (char '}')
-    sep = surroundWhitespace (char ',')
-    kv = liftA3 (\k _ v -> (k, v)) stringLiteral kvSep jValue
-    kvSep = surroundWhitespace (char ':')
+jObject =
+  JObject <$> surround (char '{') (char '}') (sepBy (char ',') kv <|> emptyList)
+  where kv = (,) <$> (ws *> stringLiteral) <*> (ws *> char ':' *> jValue)
 
 jValue :: Parser JValue
-jValue = surroundWhitespace actual
+jValue = surround ws ws actual
   where actual = jNull <|> jBool <|> jNumber <|> jString <|> jArray <|> jObject
