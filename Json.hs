@@ -99,6 +99,7 @@ escapedChar = char '\\' >> get >>= matchEscapedChar
 
 matchEscapedChar :: Alternative m => Char -> m Char
 matchEscapedChar '"' = pure '\"'
+matchEscapedChar '/' = pure '/'
 matchEscapedChar '\\' = pure '\\'
 matchEscapedChar 'b' = pure '\b'
 matchEscapedChar 'f' = pure '\f'
@@ -130,7 +131,6 @@ jNumber :: Parser JValue
 jNumber = JNumber <$> (double <|> fromIntegral <$> int)
 
 -- TODO: unicode i.e. \ube98
--- TODO: escaping forward slash
 jString :: Parser JValue
 jString = JString <$> stringLiteral
 
