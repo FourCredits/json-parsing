@@ -20,17 +20,16 @@ instance Applicative Parser where
 
 instance Alternative Parser where
   empty = Parser $ const Nothing
-  (Parser p1) <|> (Parser p2) = Parser (\s -> p1 s <|> p2 s)
+  (Parser p1) <|> (Parser p2) = Parser $ \s -> p1 s <|> p2 s
 
 instance Monad Parser where
-  return = pure
-  pa >>= f = Parser (parse pa >=> (\(a, rest) -> parse (f a) rest))
+  (Parser pa) >>= f = Parser (pa >=> (\(a, rest) -> parse (f a) rest))
 
 parseAll :: Parser a -> String -> Maybe a
-parseAll parser input =
-  case parse parser input of
-    Just (value, "") -> Just value
-    _ -> Nothing
+parseAll (Parser parser) input = do
+  (value, rest) <- parser input
+  guard $ null rest
+  pure value
 
 get :: Parser Char
 get = Parser f
@@ -39,7 +38,10 @@ get = Parser f
     f (char:rest) = Just (char, rest)
 
 satisfy :: (Char -> Bool) -> Parser Char
-satisfy predicate = get >>= (\c -> guard (predicate c) >> return c)
+satisfy predicate = do
+  c <- get
+  guard $ predicate c
+  pure c
 
 char :: Char -> Parser Char
 char c = satisfy (== c)
