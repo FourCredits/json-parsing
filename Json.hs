@@ -1,6 +1,6 @@
 module Json where
 
-import Control.Monad (guard, (>=>), void)
+import Control.Monad (guard, (>=>), void, ap, liftM)
 import Data.Bifunctor (Bifunctor(first))
 import Control.Applicative (Alternative((<|>), empty), liftA3)
 import Data.Char (isSpace, ord, isDigit)
@@ -12,18 +12,15 @@ import Data.List (foldl')
 newtype Parser a = Parser { parse :: String -> Maybe (a, String) }
 
 instance Functor Parser where
-  fmap f pa = Parser (fmap (first f) . parse pa)
+  fmap = liftM
 
 instance Applicative Parser where
   pure a = Parser (\s -> Just (a, s))
-  pf <*> pa = Parser (\s -> do
-    (f, r1) <- parse pf s
-    (a, r2) <- parse pa r1
-    return (f a, r2))
+  (<*>) = ap
 
 instance Alternative Parser where
   empty = Parser $ const Nothing
-  p1 <|> p2 = Parser (\s -> parse p1 s <|> parse p2 s)
+  (Parser p1) <|> (Parser p2) = Parser (\s -> p1 s <|> p2 s)
 
 instance Monad Parser where
   return = pure
