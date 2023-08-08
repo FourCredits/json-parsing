@@ -61,6 +61,9 @@ oneOrMore p = (:) <$> p <*> zeroOrMore p
 whitespace :: Parser ()
 whitespace = void $ zeroOrMore $ satisfy isSpace
 
+surroundWhitespace :: Parser a -> Parser a
+surroundWhitespace = surround whitespace whitespace
+
 -- Doesn't expect a trailing separator, empty result is valid
 sepBy :: Parser separator -> Parser element -> Parser [element]
 sepBy separator element =
@@ -126,24 +129,27 @@ double = parseDouble <$> oneOrMore digit <*> string "." <*> oneOrMore digit
 jNumber :: Parser JValue
 jNumber = JNumber <$> (double <|> fromIntegral <$> int)
 
+-- TODO: unicode i.e. \ube98
+-- TODO: escaping forward slash
 jString :: Parser JValue
 jString = JString <$> stringLiteral
 
 jArray :: Parser JValue
 jArray = JArray <$> surround start end (sepBy sep jValue)
   where
-    start = whitespace *> char '[' <* whitespace
-    end = whitespace *> char ']' <* whitespace
-    sep = whitespace *> char ',' <* whitespace
+    start = surroundWhitespace (char '[')
+    end = surroundWhitespace (char ']')
+    sep = surroundWhitespace (char ',')
 
 jObject :: Parser JValue
 jObject = JObject <$> surround start end (sepBy sep kv)
   where
-    start = whitespace *> char '{' <* whitespace
-    end = whitespace *> char '}' <* whitespace
-    sep = whitespace *> char ',' <* whitespace
+    start = surroundWhitespace (char '{')
+    end = surroundWhitespace (char '}')
+    sep = surroundWhitespace (char ',')
     kv = liftA3 (\k _ v -> (k, v)) stringLiteral kvSep jValue
-    kvSep = whitespace *> char ':' <* whitespace
+    kvSep = surroundWhitespace (char ':')
 
 jValue :: Parser JValue
-jValue = jNull <|> jBool <|> jNumber <|> jString <|> jArray <|> jObject
+jValue = surroundWhitespace actual
+  where actual = jNull <|> jBool <|> jNumber <|> jString <|> jArray <|> jObject
