@@ -1,6 +1,6 @@
 module Json (JValue(..), jValue) where
 
-import Control.Applicative (Alternative((<|>), empty, many, some))
+import Control.Applicative
 import Control.Monad (void, replicateM, liftM4)
 import Data.Char (chr)
 import Data.Functor (($>))
@@ -55,11 +55,10 @@ digitsToInt base = fromIntegral . foldl' f 0
        ('F', 15), ('f', 15)]
 
 exponent :: Parser Double
-exponent = do
-  char 'e' <|> char 'E'
-  sign <- char '-' $> -1 <|> char '+' $> 1 |> 1
-  digits <- some digit
-  pure $ sign * digitsToInt 10 digits
+exponent = exp *> liftA2 (*) sign (digitsToInt 10 <$> some digit)
+  where
+    sign = char '-' $> -1 <|> char '+' $> 1 |> 1
+    exp = char 'e' <|> char 'E'
 
 jString :: Parser JValue
 jString = JString <$> stringLiteral
