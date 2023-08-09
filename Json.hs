@@ -1,9 +1,10 @@
+-- TODO: tidy code
 module Json where
 
-import Control.Monad (guard, (>=>), void, ap, liftM)
+import Control.Monad (guard, (>=>), void, ap, liftM, replicateM)
 import Data.Bifunctor (Bifunctor(first))
 import Control.Applicative (Alternative((<|>), empty), liftA3)
-import Data.Char (isSpace, ord, isDigit)
+import Data.Char (isSpace, chr, ord, isDigit, isHexDigit)
 import Data.Functor (($>))
 import Data.List (foldl')
 
@@ -80,16 +81,45 @@ jNull = JNull <$ string "null"
 jBool :: Parser JValue
 jBool = JBool True <$ string "true" <|> JBool False <$ string "false"
 
-charInString :: Parser Char
-charInString = do
-  c <- satisfy (/= '"')
-  if c == '\\' then get >>= matchEscapedChar else pure c
-
 regularChar :: Parser Char
-regularChar = satisfy (/= '"')
+regularChar = satisfy (\c -> c /= '"' && c /= '\\')
 
 escapedChar :: Parser Char
-escapedChar = char '\\' >> get >>= matchEscapedChar
+escapedChar = char '\\' >> (unicodeChar <|> (get >>= matchEscapedChar))
+
+hexDigit :: Parser Char
+hexDigit = satisfy isHexDigit
+
+hexDigitsToInt :: [Char] -> Int
+hexDigitsToInt = foldl' f 0
+  where f acc n = acc * 16 + charToInt n
+
+charToInt :: Char -> Int
+charToInt '0' = 0
+charToInt '1' = 1
+charToInt '2' = 2
+charToInt '3' = 3
+charToInt '4' = 4
+charToInt '5' = 5
+charToInt '6' = 6
+charToInt '7' = 7
+charToInt '8' = 8
+charToInt '9' = 9
+charToInt 'a' = 10
+charToInt 'b' = 11
+charToInt 'c' = 12
+charToInt 'd' = 13
+charToInt 'e' = 14
+charToInt 'f' = 15
+charToInt 'A' = 10
+charToInt 'B' = 11
+charToInt 'C' = 12
+charToInt 'D' = 13
+charToInt 'E' = 14
+charToInt 'F' = 15
+
+unicodeChar :: Parser Char
+unicodeChar = chr . hexDigitsToInt <$> (char 'u' >> replicateM 4 hexDigit)
 
 matchEscapedChar :: Alternative m => Char -> m Char
 matchEscapedChar '"' = pure '\"'
@@ -106,25 +136,25 @@ stringLiteral :: Parser String
 stringLiteral =
   surround (char '"') (char '"') (zeroOrMore (escapedChar <|> regularChar))
 
-charsToInt :: String -> Int
-charsToInt = foldl' f 0
-  where f n c = (n * 10) + (ord c - ord '0')
+digitsToInt :: String -> Int
+digitsToInt = foldl' f 0
+  where f n c = (n * 10) + charToInt c
 
 digit :: Parser Char
 digit = satisfy isDigit
 
 int :: Parser Int
-int = charsToInt <$> oneOrMore digit
+int = digitsToInt <$> oneOrMore digit
 
 double :: Parser Double
 double = parseDouble <$> oneOrMore digit <*> string "." <*> oneOrMore digit
   where parseDouble a b c = read (a ++ b ++ c)
 
 -- TODO: other formats e.g. scientific notation
+-- TODO: negative numbers
 jNumber :: Parser JValue
 jNumber = JNumber <$> (double <|> fromIntegral <$> int)
 
--- TODO: unicode i.e. \ube98
 jString :: Parser JValue
 jString = JString <$> stringLiteral
 
