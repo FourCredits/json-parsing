@@ -2,11 +2,10 @@
 module Json where
 
 import Control.Monad (guard, (>=>), void, ap, liftM, replicateM)
-import Data.Bifunctor (Bifunctor(first))
-import Control.Applicative (Alternative((<|>), empty), liftA3)
-import Data.Char (isSpace, chr, ord, isDigit, isHexDigit)
+import Control.Applicative (Alternative((<|>), empty, many, some))
+import Data.Char (chr, isDigit, isHexDigit)
 import Data.Functor (($>))
-import Data.List (foldl')
+import Data.List (foldl', uncons)
 
 -- All the piping to get it to work (an ad-hoc parsing library)
 
@@ -33,10 +32,7 @@ parseAll (Parser parser) input = do
   pure value
 
 get :: Parser Char
-get = Parser f
-  where
-    f [] = Nothing
-    f (char:rest) = Just (char, rest)
+get = Parser uncons
 
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy predicate = do
@@ -53,16 +49,10 @@ string = traverse char
 surround :: Parser open -> Parser close -> Parser p1 -> Parser p1
 surround open close inner = open *> inner <* close
 
-zeroOrMore :: Parser a -> Parser [a]
-zeroOrMore p = oneOrMore p <|> pure []
-
-oneOrMore :: Parser a -> Parser [a]
-oneOrMore p = (:) <$> p <*> zeroOrMore p
-
 -- Doesn't expect a trailing separator, empty result is valid
 sepBy :: Parser separator -> Parser element -> Parser [element]
 sepBy separator element =
-  (:) <$> element <*> zeroOrMore (separator *> element) <|> pure []
+  (:) <$> element <*> many (separator *> element) <|> pure []
 
 -- The actual parsing
 
@@ -134,32 +124,42 @@ matchEscapedChar _ = empty
 
 stringLiteral :: Parser String
 stringLiteral =
-  surround (char '"') (char '"') (zeroOrMore (escapedChar <|> regularChar))
+  surround (char '"') (char '"') (many (escapedChar <|> regularChar))
 
-digitsToInt :: String -> Int
-digitsToInt = foldl' f 0
+digitsToInt :: Num a => String -> a
+digitsToInt = fromIntegral . foldl' f 0
   where f n c = (n * 10) + charToInt c
 
 digit :: Parser Char
 digit = satisfy isDigit
 
-int :: Parser Int
-int = digitsToInt <$> oneOrMore digit
-
-double :: Parser Double
-double = parseDouble <$> oneOrMore digit <*> string "." <*> oneOrMore digit
-  where parseDouble a b c = read (a ++ b ++ c)
-
--- TODO: other formats e.g. scientific notation
--- TODO: negative numbers
 jNumber :: Parser JValue
-jNumber = JNumber <$> (double <|> fromIntegral <$> int)
+jNumber = JNumber <$> (f <$> sign <*> integer <*> fraction <*> exponent)
+  where
+    f sign integer fraction exponent = sign * (integer + fraction) ** exponent
+    sign = char '-' $> -1 <|> pure 1
+    integer = (digitsToInt <$> nonZeroInteger) <|> char '0' $> 0
+    fraction = (digitsToFraction <$> (char '.' *> some digit)) <|> pure 0
+    exponent = Json.exponent <|> pure 1
+
+digitsToFraction :: [Char] -> Double
+digitsToFraction digits = digitsToInt digits / fromIntegral (length digits)
+
+nonZeroInteger :: Parser [Char]
+nonZeroInteger = (:) <$> satisfy (`elem` ['1'..'9']) <*> many digit
+
+exponent :: Parser Double
+exponent = do
+  char 'e' <|> char 'E'
+  sign <- char '-' $> -1 <|> char '+' $> 1 <|> pure 1
+  digits <- some digit
+  pure $ sign * digitsToInt digits
 
 jString :: Parser JValue
 jString = JString <$> stringLiteral
 
 ws :: Parser ()
-ws = void $ zeroOrMore (char ' ' <|> char '\r' <|> char '\n' <|> char '\t')
+ws = void $ many (char ' ' <|> char '\r' <|> char '\n' <|> char '\t')
 
 emptyList :: Parser [a]
 emptyList = ws $> []
