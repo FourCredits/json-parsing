@@ -1,29 +1,41 @@
 module Parse where
 
-import Control.Applicative (Alternative (empty, (<|>), many))
-import Control.Monad ((>=>), ap, liftM, guard)
+import Control.Applicative (Alternative (empty, (<|>), many), Applicative (liftA2))
+import Control.Monad ((>=>), guard)
+import Data.Bifunctor (first)
 import Data.Char (isDigit, isHexDigit)
 import Data.List (uncons)
 import Data.Functor (($>))
 
-newtype Parser a = Parser { parse :: String -> Maybe (a, String) }
+data State = State String Int Int deriving (Show, Eq)
+newtype Parser a =
+  Parser { runParser :: State -> Either (Int, Int) (a, State) }
+
+parse :: Parser a -> String -> Either (Int, Int) a
+parse (Parser f) text = do
+  (value, State remaining line column) <- f (State text 0 0)
+  if null remaining then Right value else Left (line, column)
 
 instance Functor Parser where
-  fmap = liftM
+  fmap f (Parser p) = Parser (fmap (first f) . p)
 
 instance Applicative Parser where
-  pure a = Parser (\s -> Just (a, s))
-  (<*>) = ap
+  pure a = Parser (\s -> pure (a, s))
+  Parser pf <*> Parser pa = Parser (pf >=> \(f, s') -> first f <$> pa s')
 
 instance Alternative Parser where
-  empty = Parser $ const Nothing
-  (Parser p1) <|> (Parser p2) = Parser $ \s -> p1 s <|> p2 s
+  empty = Parser $ \(State _ l c) -> Left (0, 0)
+  (Parser p1) <|> (Parser p2) = Parser $ \s -> p1 s <> p2 s
 
 instance Monad Parser where
-  (Parser pa) >>= f = Parser (pa >=> (\(a, rest) -> parse (f a) rest))
+  (Parser pa) >>= f = Parser (pa >=> (\(a, rest) -> runParser (f a) rest))
 
 get :: Parser Char
-get = Parser uncons
+get = Parser f
+  where
+    f (State ('\n':cs) line column) = Right ('\n', State cs (line + 1) 0)
+    f (State (c:cs) line column) = Right (c, State cs line (column + 1))
+    f (State [] line column) = Left (line, column)
 
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy predicate = get >>= (\c -> guard (predicate c) $> c)
