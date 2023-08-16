@@ -52,7 +52,8 @@ jNumber = JNumber <$> liftM4 f sign integer fraction exponent
     nonZeroInteger = (:) <$> satisfy (`elem` ['1'..'9']) <*> many digit
 
 digitsToFraction :: [Char] -> Double
-digitsToFraction digits = digitsToInt 10 digits / fromIntegral (length digits)
+digitsToFraction digits =
+  digitsToInt 10 digits / (10 ** fromIntegral (length digits))
 
 digitsToInt :: Num a => Int -> String -> a
 digitsToInt base = fromIntegral . foldl' f 0
