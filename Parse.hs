@@ -1,26 +1,32 @@
 module Parse where
 
-import Control.Applicative (Alternative (empty, (<|>), many))
+import Control.Applicative (Alternative (empty, (<|>), many), Applicative (liftA2))
 import Control.Monad ((>=>), ap, liftM, guard)
+import Data.Bifunctor (first, Bifunctor (bimap, second))
 import Data.Char (isDigit, isHexDigit)
 import Data.List (uncons)
 import Data.Functor (($>))
 
-newtype Parser a = Parser { parse :: String -> Maybe (a, String) }
+newtype Parser a = Parser { runParser :: String -> Maybe (a, String) }
+
+parse :: Parser a -> String -> Maybe a
+parse (Parser f) text = case f text of
+  Just (a, "") -> Just a
+  _ -> Nothing
 
 instance Functor Parser where
-  fmap = liftM
+  fmap f (Parser p) = Parser (fmap (first f) . p)
 
 instance Applicative Parser where
-  pure a = Parser (\s -> Just (a, s))
-  (<*>) = ap
+  pure a = Parser (\s -> pure (a, s))
+  Parser pf <*> Parser pa = Parser (pf >=> \(f, s') -> first f <$> pa s')
 
 instance Alternative Parser where
-  empty = Parser $ const Nothing
+  empty = Parser $ const empty
   (Parser p1) <|> (Parser p2) = Parser $ \s -> p1 s <|> p2 s
 
 instance Monad Parser where
-  (Parser pa) >>= f = Parser (pa >=> (\(a, rest) -> parse (f a) rest))
+  (Parser pa) >>= f = Parser (pa >=> (\(a, rest) -> runParser (f a) rest))
 
 get :: Parser Char
 get = Parser uncons
