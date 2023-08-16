@@ -4,7 +4,7 @@ import Control.Applicative
 import Control.Monad (void, replicateM, liftM4)
 import Data.Char (chr)
 import Data.Functor (($>))
-import Data.List (foldl')
+import Data.List (foldl', intercalate)
 import Data.Maybe (fromJust)
 import Parse
 
@@ -15,7 +15,18 @@ data JValue
   | JString String
   | JArray [JValue]
   | JObject [(String, JValue)]
-  deriving (Show, Eq)
+  deriving Eq
+
+instance Show JValue where
+  show JNull = "null"
+  show (JBool True) = "true"
+  show (JBool False) = "false"
+  show (JString s) = '"' : s ++ "\""
+  show (JNumber n) = if fromIntegral floored == n then show floored else show n
+    where floored = floor n :: Int
+  show (JArray values) = '[' : intercalate ", " (map show values) ++ "]"
+  show (JObject kvs) = '{' : intercalate ", " (map showKv kvs) ++ "}"
+    where showKv (k, v) = show (JString k) ++ ": " ++ show v
 
 jValue :: Parser JValue
 jValue = surround ws ws actual
