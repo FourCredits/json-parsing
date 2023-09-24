@@ -24,7 +24,7 @@ instance Applicative Parser where
   Parser pf <*> Parser pa = Parser (pf >=> \(f, s') -> first f <$> pa s')
 
 instance Alternative Parser where
-  empty = Parser $ \(State _ l c) -> Left (1, 0)
+  empty = Parser $ \(State _ l c) -> Left (l, c)
   (Parser p1) <|> (Parser p2) = Parser $ \s -> p1 s <> p2 s
 
 instance Monad Parser where

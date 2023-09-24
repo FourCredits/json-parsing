@@ -29,11 +29,10 @@ instance Show JValue where
     where showKv (k, v) = show (JString k) ++ ": " ++ show v
 
 jValue :: Parser JValue
-jValue = surround ws ws actual
-  where actual = jNull <|> jBool <|> jNumber <|> jString <|> jArray <|> jObject
+jValue = surround ws ws (asum [jNull, jBool, jNumber, jString, jArray, jObject])
 
 ws :: Parser ()
-ws = void $ many (char ' ' <|> char '\r' <|> char '\n' <|> char '\t')
+ws = void $ many $ asum [char ' ', char '\r', char '\n', char '\t']
 
 jNull :: Parser JValue
 jNull = JNull <$ string "null"
